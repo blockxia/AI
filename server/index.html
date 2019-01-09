@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="best" content="Best">
+  <title>人脸识别</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+      background: #f9f9f9;
+    }
+
+    body {
+      display: flex;
+      /*弹性布局,用来为盒状模型提供最大的灵活性。任何一个容器都可以指定为Flex布局。
+                 子元素的float、clear和vertical-align属性将失效。http://blog.csdn.net/u011300580/article/details/56011564*/
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .veriface {
+      width: 800px;
+      height: 500px;
+      background-color: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      align-items: center;
+    }
+
+    .veriface .capture {
+      display: block;
+      width: 760px;
+      height: 360px;
+      background-color: #222222;
+    }
+
+    .veriface .control {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-around;
+      align-items: center;
+      width: 100%;
+      height: 70px;
+    }
+
+    .veriface .control span {
+      width: 100px;
+      height: 45px;
+      background: #F9F9F9;
+      text-align: center;
+      line-height: 45px;
+      color: #222222;
+      font-size: 12px;
+      border-radius: 8px;
+      box-shadow: 0 0 4px #cccccc;
+      user-select: none;
+      cursor: pointer;
+      transition: 1s;
+    }
+
+    .veriface .control span:hover {
+      background-color: #e6e6e6;
+    }
+
+    .veriface h3.notice {
+      color: #336688;
+    }
+    .draw_img{
+      position: fixed;
+      bottom: 0px;
+      left: 0px;
+    }
+  </style>
+</head>
+<body>
+<canvas class="draw_img" width="300" height="200"></canvas>
+<div class="veriface" style="margin-top: 3px">
+  <video class="capture" width="760" height="360" src=""></video>
+  <h3 class="notice">把脸放过来</h3>
+  <div class="control">
+    <span class="open">开启摄像头</span>
+    <span class="recognition">人脸识别</span>
+    <span class="close">关闭摄像头</span>
+  </div>
+</div>
+<script>
+  /*
+        从前台到后台的人脸识别
+          1.开启摄像头
+              1)window.navigator
+          2.同步到video的src
+              对象=> window.URL =>blob
+              1)解析视频流为blob 添加到 src
+          3.canvas创建视频片段照片
+          4.
+  */
+
+  var open = document.querySelector('.open');//获取open按钮
+  var capture = document.querySelector('.capture'); // 获取video标签
+  var recognition = document.querySelector('.recognition'); //获取人脸识别的按钮
+
+  var close = document.querySelector('.close');
+  var notice = document.querySelector('.notice');
+  var canvas = document.querySelector('.draw_img');
+  var context = canvas.getContext('2d');
+  var buffer;
+
+  open.onclick = invokingCamera;  //回调函数 函数名称加括号是主动执行
+  recognition.onclick = screenShot;  //点击人脸识别
+  close.onclick = function () {
+    //console.log(buffer);
+    buffer && buffer.getTracks()[0].stop(); //停止视频流
+    //console.log(buffer);
+  }
+  //获取摄像头,获取流媒体数据
+  function invokingCamera() {
+    if (navigator.mediaDevices.getUserMedia) {
+      //优先使用前置摄像头
+      navigator.mediaDevices.getUserMedia({audio: false, video: {facingMode: "user"}}).then(
+        //获取视频流数据 成功后
+        function (MediaStream) {
+          //console.log(stream);
+          buffer = MediaStream; //会指向一个内存地址
+          //console.log(buffer);
+          capture.srcObject = MediaStream;
+          capture.onloadedmetadata = function(e) {
+            capture.play();
+          };
+        }
+      ).catch(
+        //失败后
+        function (err) {
+          console.log(err.name + ": " + err.message);
+        }
+      );
+    } else {
+      alert('您的浏览器不支持摄像头');
+    }
+  }
+
+  function screenShot() {
+    msg('正在检测,请稍后~~~', '#c665ff');
+    context.drawImage(capture,0,0,200,150);
+    new Post({
+      url: '/judge',
+      data:canvas.toDataURL('image/png'),
+      success: function (res) {
+        console.log(res); //服务器发送的消息
+        res = JSON.parse(res).result.score;
+        console.log(typeof res);
+        console.log('xiangyingshuju', res);
+        if (res > 85) {
+          msg('欢迎主人~', '#7ef6c7');
+        } else {
+          msg('丑拒~~', '#f10d0f');
+        }
+      }
+    })
+  }
+
+  function msg(con, color) { //输出信息
+    notice.innerHTML = con + '';
+    notice.style.color = color;
+  }
+
+  //post 方式传输数据 get的话 base64 5mb url
+  function Post(opt) {
+    //构造函数
+    this.init(opt);
+  }
+
+  Post.prototype = {
+    init: function (opt) {  //初始化 参数 URL地址 Data参数 method方式
+      this.url = opt.url || '';
+      this.data = opt.data || {};
+      this.method = 'POST';
+      this.async = true;//异步
+      this.success = opt.success || function () {  //回调函数
+      }
+      this.xhr();
+    },
+    xhr: function () {
+      var that = this;
+      var xhr = new XMLHttpRequest();//ajax对象实例化
+      console.log(this.data)
+      //请求的类型  请求地址 异步或者同步
+      xhr.open(this.method, this.url, this.async);
+      xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded;charset=utf-8'); //表头
+      xhr.send('img='+this.data);
+      xhr.onreadystatechange = function (ev) {
+        if (xhr.status === 200 && xhr.readyState === 4) {
+          this.success(xhr.response);//回调数据
+        }
+      }.bind(this);
+    }
+  }
+  new Post({
+    url: '/access',
+    data:''
+  })
+</script>
+</body>
+</html>
